@@ -21,12 +21,12 @@ namespace Microsoft.Extensions.DependencyInjection.ServiceLookup
             }
         }
 
-        public void ValidateResolution(ServiceCallSite callSite, IServiceScope scope, IServiceScope rootScope)
+        public void ValidateResolution(ServiceCacheKey cacheKey, IServiceScope scope, IServiceScope rootScope)
         {
             if (ReferenceEquals(scope, rootScope)
-                && _scopedServices.TryGetValue(callSite.Cache.Key, out Type? scopedService))
+                && _scopedServices.TryGetValue(cacheKey, out Type? scopedService))
             {
-                Type serviceType = callSite.ServiceType;
+                Type serviceType = cacheKey.Type!;
                 if (serviceType == scopedService)
                 {
                     throw new InvalidOperationException(

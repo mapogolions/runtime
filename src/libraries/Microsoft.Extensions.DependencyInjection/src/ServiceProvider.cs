@@ -120,11 +120,11 @@ namespace Microsoft.Extensions.DependencyInjection
             _callSiteValidator?.ValidateCallSite(callSite);
         }
 
-        private void OnResolve(ServiceCallSite? callSite, IServiceScope scope)
+        private void OnResolve(ServiceAccessor accessor, IServiceScope scope)
         {
-            if (callSite != null)
+            if (!ReferenceEquals(accessor, None))
             {
-                _callSiteValidator?.ValidateResolution(callSite, scope, Root);
+                _callSiteValidator?.ValidateResolution(accessor.CacheKey, scope, Root);
             }
         }
 
@@ -135,10 +135,10 @@ namespace Microsoft.Extensions.DependencyInjection
                 ThrowHelper.ThrowObjectDisposedException();
             }
 
-            ServiceAccessor realizedService = _realizedServices.GetOrAdd(serviceType, _createServiceAccessor);
-            OnResolve(realizedService.CallSite, serviceProviderEngineScope);
+            ServiceAccessor serviceAccessor = _realizedServices.GetOrAdd(serviceType, _createServiceAccessor);
+            OnResolve(serviceAccessor, serviceProviderEngineScope);
             DependencyInjectionEventSource.Log.ServiceResolved(this, serviceType);
-            var result = realizedService.RealizedService?.Invoke(serviceProviderEngineScope);
+            var result = serviceAccessor.RealizedService?.Invoke(serviceProviderEngineScope);
             System.Diagnostics.Debug.Assert(result is null || CallSiteFactory.IsService(serviceType));
             return result;
         }
@@ -176,17 +176,20 @@ namespace Microsoft.Extensions.DependencyInjection
                 if (callSite.Cache.Location == CallSiteResultCacheLocation.Root)
                 {
                     object? value = CallSiteRuntimeResolver.Instance.Resolve(callSite, Root);
-                    return new ServiceAccessor { CallSite = callSite, RealizedService = scope => value };
+                    return new ServiceAccessor(callSite.Cache.Key, scope => value);
                 }
 
-                return new ServiceAccessor { CallSite = callSite, RealizedService = _engine.RealizeService(callSite) };
+                return new ServiceAccessor(callSite.Cache.Key, _engine.RealizeService(callSite));
             }
-            return new ServiceAccessor { CallSite = callSite, RealizedService = _ => null };
+            return None;
         }
+
+        private readonly ServiceAccessor None = new ServiceAccessor(default, _ => null);
+
 
         internal void ReplaceServiceAccessor(ServiceCallSite callSite, Func<ServiceProviderEngineScope, object?> accessor)
         {
-            _realizedServices[callSite.ServiceType] = new ServiceAccessor { CallSite = callSite, RealizedService = accessor };
+            _realizedServices[callSite.ServiceType] = new ServiceAccessor(callSite.Cache.Key, accessor);
         }
 
         internal IServiceScope CreateScope()
@@ -225,8 +228,14 @@ namespace Microsoft.Extensions.DependencyInjection
 
         private sealed class ServiceAccessor
         {
-            public ServiceCallSite? CallSite { get; set; }
-            public Func<ServiceProviderEngineScope, object?>? RealizedService { get; set; }
+            public ServiceAccessor(ServiceCacheKey cacheKey, Func<ServiceProviderEngineScope, object?> realizedService)
+            {
+                CacheKey = cacheKey;
+                RealizedService = realizedService;
+            }
+
+            public ServiceCacheKey CacheKey { get; }
+            public Func<ServiceProviderEngineScope, object?> RealizedService { get; }
         }
     }
 }
