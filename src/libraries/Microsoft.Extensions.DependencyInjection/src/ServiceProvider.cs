@@ -138,7 +138,7 @@ namespace Microsoft.Extensions.DependencyInjection
             ServiceAccessor realizedService = _realizedServices.GetOrAdd(serviceType, _createServiceAccessor);
             OnResolve(realizedService.CallSite, serviceProviderEngineScope);
             DependencyInjectionEventSource.Log.ServiceResolved(this, serviceType);
-            var result = realizedService.RealizedService.Invoke(serviceProviderEngineScope);
+            var result = realizedService.RealizedService?.Invoke(serviceProviderEngineScope);
             System.Diagnostics.Debug.Assert(result is null || CallSiteFactory.IsService(serviceType));
             return result;
         }
@@ -223,10 +223,10 @@ namespace Microsoft.Extensions.DependencyInjection
             ServiceProviderEngine CreateDynamicEngine() => new DynamicServiceProviderEngine(this);
         }
 
-        private struct ServiceAccessor
+        private sealed class ServiceAccessor
         {
             public ServiceCallSite? CallSite { get; set; }
-            public Func<ServiceProviderEngineScope, object?> RealizedService { get; set; }
+            public Func<ServiceProviderEngineScope, object?>? RealizedService { get; set; }
         }
     }
 }
